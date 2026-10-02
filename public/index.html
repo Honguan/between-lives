@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101819">
+  <meta name="description" content="如果下一生不必是人，你想成為什麼？在萬象之間，成為鯨、星雲或一段未被說出的記憶。你的選擇將穿越輪迴，改寫宇宙。">
+  <meta property="og:title" content="萬象之間 BETWEEN LIVES">
+  <meta property="og:description" content="一場沒有標準答案的存在實驗。成為萬物，經歷不可能。">
+  <title>萬象之間 · BETWEEN LIVES</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳至主要內容</a>
+  <header class="site-header">
+    <a class="brand" href="#" aria-label="萬象之間，首頁"><span class="brand-symbol">✳</span><span>萬象之間<small>BETWEEN LIVES</small></span></a>
+    <nav aria-label="主要導覽">
+      <button data-action="home" class="nav-button active" id="nav-home">存在實驗</button>
+      <button data-action="archive" class="nav-button" id="nav-archive">萬象圖鑑 <span id="archive-count">00</span></button>
+      <button data-action="history" class="nav-button" id="nav-history">輪迴手記</button>
+    </nav>
+    <div class="header-tools"><button class="icon-button" data-action="sound" aria-label="開啟環境音" aria-pressed="false" id="sound-button">♫</button><button class="icon-button" data-action="settings" aria-label="存檔與設定">☷</button></div>
+  </header>
+  <main id="main" tabindex="-1"></main>
+  <footer class="site-footer"><span><i class="status-dot"></i> 此刻，某個宇宙正因你而改變。</span><div><button data-action="help">遊玩指南</button><a href="https://github.com/Honguan/between-lives" target="_blank" rel="noopener noreferrer">開放原始碼 ↗</a><span>v1.0</span></div></footer>
+  <dialog id="dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <input id="import-file" type="file" accept="application/json,.json" hidden>
+  <noscript><p class="noscript">請啟用 JavaScript，讓你的宇宙開始運轉。</p></noscript>
+</body>
+</html>

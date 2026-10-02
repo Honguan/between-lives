@@ -1,0 +1,7 @@
+.token-optimizer/
+.artifacts/
+node_modules/
+.env*
+*.log
+*.tar.gz
+*.tmp
