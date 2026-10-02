@@ -1,5 +1,6 @@
 .token-optimizer/
 .artifacts/
+dist/
 node_modules/
 .env*
 *.log
