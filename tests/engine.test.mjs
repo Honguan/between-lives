@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyCampaign,draft,startLife,currentEvent,choose,advance,finish,parseSave,chance } from '../public/engine.js';
-import { FORMS,LAWS,TALENTS } from '../public/content.js';
+import { emptyCampaign,draft,startLife,currentEvent,choose,advance,finish,parseSave,chance,simulate,ENDINGS } from '../public/engine.js';
+import { FORMS,WORLDS,LAWS,TALENTS,ARTIFACTS,ACHIEVEMENTS } from '../public/content.js';
 import { EVENTS } from '../public/events.js';
+import { CURIOS,CONDITIONS,SCENE_COUNT } from '../public/fragments.js';
+import { EN,END_EN,CURIOS_EN,CONDITIONS_EN,eventEnglish } from '../public/english.js';
 
 function born(seed='test',formId,mode='classic'){
   const campaign=emptyCampaign();const offer=draft(seed);
@@ -116,4 +118,65 @@ test('long campaigns retain 120 complete histories and remain exportable and imp
 test('imports reject result screens with missing journal context',()=>{
   const c=born();choose(c,0);c.current.logs=[];
   assert.throws(()=>parseSave(JSON.stringify(c)),/格式或版本/);
+});
+
+test('automatic lives honor world and species, and resume deterministically without player choices',()=>{
+  for(let i=0;i<FORMS.length;i++){
+    let a=emptyCampaign();startLife(a,{seed:`automatic-${i}`,formId:FORMS[i].id,worldId:WORLDS[i%WORLDS.length].id,auto:true});
+    assert.equal(a.current.formId,FORMS[i].id);assert.equal(a.current.worldId,WORLDS[i%WORLDS.length].id);
+    assert.equal(a.current.talents.length,2);
+    const b=structuredClone(a);let ticks=0;
+    while(a.current.phase!=='ended'){
+      assert.ok(++ticks<=30);
+      simulate(a);a=parseSave(JSON.stringify(a));
+      // Rendering another language may happen any number of times between ticks.
+      const before=JSON.stringify(b);eventEnglish(b.current);assert.equal(JSON.stringify(b),before);
+      simulate(b);assert.deepEqual(a,b);
+    }
+    simulate(a);assert.equal(a.total,1);
+  }
+});
+test('6,000 automatic lives reach every ending without altering game state',()=>{
+  const counts={};const scenes=new Set();
+  for(let i=0;i<6000;i++){
+    const c=emptyCampaign();startLife(c,{seed:`auto-${i}`,auto:true});let ticks=0;
+    while(c.current.phase!=='ended'){
+      assert.ok(++ticks<=30);simulate(c);
+      if(c.current.eventId==='woven')scenes.add(c.current.weave.scene);
+      for(const value of Object.values(c.current.stats))assert.ok(value>=0&&value<=100);
+    }
+    const key=c.current.ending.key;counts[key]=(counts[key]||0)+1;
+    if(i%100===0)assert.deepEqual(parseSave(JSON.stringify(c)),c);
+  }
+  assert.deepEqual(Object.keys(counts).sort(),Object.keys(ENDINGS).sort());
+  assert.equal(scenes.size,SCENE_COUNT);
+  console.log('Automatic endings:',JSON.stringify(counts));
+});
+test('both languages cover all catalog entries and procedural scenes without unresolved placeholders',()=>{
+  for(const [list,prefix] of [[FORMS,''],[WORLDS,''],[LAWS,'law:'],[TALENTS,'talent:'],[ARTIFACTS,''],[ACHIEVEMENTS,'achievement:']])for(const item of list){
+    const en=EN[prefix+item.id];assert.ok(en?.name&&en.description,`Missing translation: ${prefix+item.id}`);
+    assert.doesNotMatch(en.name+en.description,/[\u3400-\u9fff]|undefined/);
+  }
+  assert.deepEqual(Object.keys(END_EN).sort(),Object.keys(ENDINGS).sort());
+  assert.equal(CURIOS_EN.length,CURIOS.length);assert.equal(CONDITIONS_EN.length,CONDITIONS.length);
+  const c=born();c.current.eventId='woven';
+  for(let scene=0;scene<SCENE_COUNT;scene++)for(let curio=0;curio<CURIOS.length;curio++)for(let condition=0;condition<CONDITIONS.length;condition++){
+    c.current.weave={scene,curio,condition,visitor:'concept-9'};
+    const zh=currentEvent(c.current),en=eventEnglish(c.current);
+    assert.doesNotMatch(JSON.stringify(en),/[\u3400-\u9fff]|undefined|\{\w+\}/);
+    assert.equal(en.choices.length,zh.choices.length);
+    for(let i=0;i<3;i++){assert.ok(en.choices[i].label&&en.choices[i].success);if(zh.choices[i].difficulty)assert.ok(en.choices[i].failure);}
+  }
+});
+test('English outcome records remain complete after transformation, travel and law changes',()=>{
+  for(const e of [...EVENTS.map(x=>x.id),'crossing','rewrite',...['garden','letter','friend','door','star','name','mirror','signal'].map(x=>'chain-'+x)])for(let index=0;index<3;index++){
+    const c=born('translation');c.current.eventId=e;const en=eventEnglish(c.current);choose(c,index);
+    const log=c.current.logs.at(-1);assert.equal(log.en.title,en.title);assert.equal(log.en.body,en.body);
+    assert.ok(log.en.text);assert.doesNotMatch(JSON.stringify(log.en),/[\u3400-\u9fff]|undefined|\{\w+\}/);
+  }
+});
+test('old logs without translations load intact and untrusted bilingual records are bounded',()=>{
+  const c=play(born());for(const l of [...c.current.logs,...c.history[0].logs])delete l.en;
+  assert.deepEqual(parseSave(JSON.stringify(c)),c);
+  const d=born();simulate(d);d.current.logs[0].en.body='x'.repeat(2001);assert.throws(()=>parseSave(JSON.stringify(d)));
 });

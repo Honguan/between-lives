@@ -1,6 +1,7 @@
 import { FORMS, WORLDS, LAWS, TALENTS, ARTIFACTS, GROUPS } from './content.js';
 import { EVENTS, CHAINS, chainEvent, CROSSING, REWRITE } from './events.js';
 import { CURIOS,CONDITIONS,SCENE_COUNT,wovenEvent } from './fragments.js';
+import { eventEnglish,detailEnglish,EN } from './english.js';
 
 export const SAVE_VERSION = 1;
 const clamp = (n, low = 0, high = 100) => Math.min(high, Math.max(low, n));
@@ -33,12 +34,12 @@ export function startLife(campaign, options) {
   const seed = String(options.seed || '萬象初始').trim().slice(0,80) || '萬象初始';
   const offer = draft(seed);
   const form = FORMS.find(f=>f.id===options.formId) || FORMS.find(f=>f.id===offer.formId);
-  const talents = [...new Set(options.talents || [])].filter(id=>offer.talents.includes(id)).slice(0,2);
+  const talents = [...new Set(options.auto ? offer.talents.slice(0,2) : options.talents || [])].filter(id=>offer.talents.includes(id)).slice(0,2);
   const mode = options.mode === 'drift' ? 'drift' : 'classic';
   const life = {
     seed,rng:hash(`${seed}:life`),number:campaign.total+1,formId:form.id,
     customName:String(options.customName || '').trim().slice(0,24),originFormId:form.id,
-    worldId:offer.worldId,lawId:offer.lawId,talents,mode,
+    worldId:WORLDS.some(w=>w.id===options.worldId)?options.worldId:offer.worldId,lawId:offer.lawId,talents,mode,
     stats:{e:76,w:28,b:28,c:22},turn:1,limit:24,phase:'choice',
     eventId:'',otherId:'',eventWitness:'',weave:null,seen:[],pending:[],logs:[],shifts:0,callbacks:0,
     revived:false,artifact:'',ending:null,result:null,
@@ -128,6 +129,7 @@ export function choose(campaign, index) {
   if(!life || life.phase!=='choice')return null;
   const event=currentEvent(life), choice=event.choices[index];
   if(!choice)return null;
+  const english=eventEnglish(life),englishChoice=english.choices[index];
   const before={...life.stats};
   const success=random(life)*100<choice.chance;
   const effects=success?{...choice.effects}:{e:-8,[choice.stat]:3};
@@ -177,7 +179,7 @@ export function choose(campaign, index) {
   for(const key in life.stats)life.stats[key]=clamp(life.stats[key]);
   const delta=Object.fromEntries(Object.keys(before).map(k=>[k,life.stats[k]-before[k]]));
   life.result={success,text,details,delta,label:choice.label,title:event.title};
-  life.logs.push({turn:life.turn,title:event.title,body:event.body,choice:choice.label,text,details:[...details],success,form:currentForm(life).name});
+  life.logs.push({turn:life.turn,title:event.title,body:event.body,choice:choice.label,text,details:[...details],success,form:currentForm(life).name,en:{title:english.title,body:english.body,choice:englishChoice.label,text:success?englishChoice.success:englishChoice.failure,details:details.map(detailEnglish),form:EN[life.formId].name}});
   life.phase='result';
   checkAchievements(campaign);
   return life.result;
@@ -187,6 +189,20 @@ export function advance(campaign) {
   if(!life || life.phase!=='result')return;
   if(life.stats.e<=0 || life.turn>=life.limit){finish(campaign);return;}
   life.turn++;life.phase='choice';life.result=null;nextEvent(life);
+}
+// One automatic chapter per tick. Reading speed and language never consume randomness.
+export const inclination=life=>['e','w','b','c'][hash(`${life.seed}:${life.originFormId}:instinct`)%4];
+export function simulate(campaign) {
+  const life=campaign.current;
+  if(!life || life.phase==='ended')return;
+  if(life.phase==='result')advance(campaign);
+  if(life.phase!=='choice')return;
+  const choices=currentEvent(life).choices;
+  const instinct=inclination(life);
+  const weights=choices.map(c=>3+life.stats[c.stat]*0.08+(c.stat===instinct?100:0)+(c.stat==='e'?Math.max(0,35-life.stats.e)*3:0));
+  let roll=random(life)*weights.reduce((a,b)=>a+b,0),index=weights.length-1;
+  for(let i=0;i<weights.length;i++){roll-=weights[i];if(roll<0){index=i;break;}}
+  choose(campaign,index);
 }
 function checkAchievements(campaign) {
   const life=campaign.current;
@@ -198,7 +214,7 @@ function checkAchievements(campaign) {
   if(life.shifts)remember(campaign.achievements,'shift');
   for(const [stat,id]of [['b','bond'],['w','wisdom'],['c','chaos']])if(life.stats[stat]>=90)remember(campaign.achievements,id);
 }
-const ENDINGS = {
+export const ENDINGS = {
   quiet:['靜靜回到萬物之中','你的輪廓慢慢鬆開。不再是一個明確的自己，卻成為了許多事物的可能。'],
   bond:['成為別人的遠方','你不在原地了，仍有許多生命，因為曾與你相遇而繼續向前。'],
   wisdom:['宇宙借過你的眼睛','你看見的事物已無法被完整說明。它們變成下一個世界裡，一點不知從何而來的靈感。'],
@@ -206,13 +222,28 @@ const ENDINGS = {
   wander:['沒有終點的旅人','你沒有找到唯一的答案。你讓許多原本孤立的地方，多了一條相通的路。'],
   keeper:['微小而完整的一生','你照顧好了一小片宇宙。那一片不大，卻足夠讓某個存在第一次安心。'],
   impossible:['萬物之間的第七種存在','你同時理解了孤單、未知與不可能。宇宙無法再替你分類，只好留下一個空白的新章節。'],
+  returner:['最後一頁以後的一生','你記得存在歸零的那一刻。重新醒來後，每一天都超出了原先的預計。'],
+  courier:['替宇宙保管回信','那些以為寄丟的訊息，經過你抵達了收件者。你離開以後，這條路仍有人走。'],
+  solitary:['獨自畫完的地圖','一路上很少有人同行。你仔細留下的記錄，會讓下一位旅人少迷路幾次。'],
+  survivor:['一直亮著的避難所','最後一章到了，你仍有餘力。留下的溫度，足以讓後來的生命避過一場寒冬。'],
+  twin:['三種形狀，共用一段記憶','你先後住過三種形狀。每一次換過身體，都留下了別的生命教不會你的習慣。'],
 };
 export function finish(campaign, voluntary=false) {
   const life=campaign.current;
   if(!life || life.phase==='ended')return;
   const {e,w,b,c}=life.stats;
   let key=e<=0?'quiet':b>=75&&b>=w&&b>=c?'bond':w>=75&&w>=c?'wisdom':c>=75?'chaos':life.shifts>0?'wander':'keeper';
-  if(e>0&&b>=65&&w>=65&&c>=65&&life.callbacks>=2)key='impossible';
+  if(e>0){
+    if(e>=80)key='survivor';
+    if(life.shifts===0&&life.callbacks===1&&e>=50)key='keeper';
+    if(life.shifts===1&&life.callbacks<4&&c>=65)key='wander';
+    if(life.callbacks===0&&w>=60)key='solitary';
+    if(life.shifts===2)key='twin';
+    if(life.callbacks>=4)key='courier';
+    if(c>=90&&c>=w&&c>=b&&inclination(life)==='c')key='chaos';
+    if(life.revived)key='returner';
+  }
+  if(e>0&&b>=95&&w>=95&&c>=95&&life.callbacks>=4)key='impossible';
   if(voluntary)key='quiet';
   const [title,text]=ENDINGS[key];
   const maxStat=Object.entries(life.stats).sort((a,b)=>b[1]-a[1])[0][0];
@@ -239,9 +270,9 @@ export function parseSave(text) {
   const id=(x,items)=>items.some(i=>i.id===x)?x:fail();
   const stats=x=>Object.fromEntries(['e','w','b','c'].map(k=>[k,num(obj(x)[k],0,100)]));
   const memory=x=>({form:str(obj(x).form,50),artifact:id(x.artifact,ARTIFACTS),ending:str(x.ending,100)});
-  const log=x=>({turn:num(obj(x).turn,1,29),title:str(x.title),body:str(x.body,2000),choice:str(x.choice),text:str(x.text,2000),details:arr(x.details,10).map(t=>str(t)),success:bool(x.success),form:str(x.form,50)});
+  const log=x=>({turn:num(obj(x).turn,1,29),title:str(x.title),body:str(x.body,2000),choice:str(x.choice),text:str(x.text,2000),details:arr(x.details,10).map(t=>str(t)),success:bool(x.success),form:str(x.form,50),...(x.en?{en:{title:str(obj(x.en).title),body:str(x.en.body,2000),choice:str(x.en.choice),text:str(x.en.text,2000),details:arr(x.en.details,10).map(t=>str(t)),form:str(x.en.form,100)}}:{})});
   obj(source);if(source.version!==SAVE_VERSION)fail();
-  const output={version:SAVE_VERSION,total:num(source.total),forms:[...new Set(arr(source.forms,48).map(v=>id(v,FORMS)))],worlds:[...new Set(arr(source.worlds,12).map(v=>id(v,WORLDS)))],achievements:arr(source.achievements,10).map(v=>str(v,30)),memories:arr(source.memories,6).map(memory),history:[],current:null};
+  const output={version:SAVE_VERSION,total:num(source.total),forms:[...new Set(arr(source.forms,FORMS.length).map(v=>id(v,FORMS)))],worlds:[...new Set(arr(source.worlds,WORLDS.length).map(v=>id(v,WORLDS)))],achievements:arr(source.achievements,10).map(v=>str(v,30)),memories:arr(source.memories,6).map(memory),history:[],current:null};
   output.history=arr(source.history,120).map(x=>({number:num(obj(x).number,1),form:str(x.form,50),group:Object.hasOwn(GROUPS,x.group)?x.group:fail(),origin:str(x.origin,50),seed:str(x.seed,80),world:str(x.world,50),ending:str(x.ending,100),turns:num(x.turns,1,29),artifact:id(x.artifact,ARTIFACTS),stats:stats(x.stats),logs:arr(x.logs,29).map(log)}));
   if(source.current){
     const x=obj(source.current);
