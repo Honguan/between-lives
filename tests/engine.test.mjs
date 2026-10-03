@@ -10,6 +10,18 @@ function born(seed='test',formId,mode='classic'){
   const campaign=emptyCampaign();const offer=draft(seed);
   startLife(campaign,{seed,formId,talents:offer.talents.slice(0,2),mode});return campaign;
 }
+
+test('ending discoveries migrate old saves and outlive retained stories',()=>{
+  const campaign=born('ending-collection');play(campaign);
+  const key=campaign.current.ending.key;
+  assert.deepEqual(campaign.endings,[key]);
+  const old=structuredClone(campaign);delete old.endings;
+  assert.deepEqual(parseSave(JSON.stringify(old)).endings,[key]);
+  campaign.history=[];campaign.current=null;
+  assert.deepEqual(parseSave(JSON.stringify(campaign)).endings,[key]);
+  campaign.endings=['unknown'];
+  assert.throws(()=>parseSave(JSON.stringify(campaign)),/存檔格式/);
+});
 function play(campaign,policy=()=>2){
   let count=0;
   while(campaign.current.phase!=='ended'){

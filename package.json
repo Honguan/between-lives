@@ -1,12 +1,12 @@
 {
   "name": "between-lives",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "description": "萬象之間 — a speculative, procedural reincarnation simulator",
   "scripts": {
     "start": "node scripts/serve.mjs",
-    "test": "node --test tests/engine.test.mjs",
+    "test": "node --test tests/*.test.mjs",
     "build": "node scripts/build.mjs"
   },
   "engines": { "node": ">=22" },

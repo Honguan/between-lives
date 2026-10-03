@@ -21,7 +21,7 @@ const pick = (state, items) => items[Math.floor(random(state) * items.length)];
 const has = (life, id) => life.talents.includes(id);
 const remember = (list, value) => { if (!list.includes(value)) list.push(value); };
 export function emptyCampaign() {
-  return {version:SAVE_VERSION,total:0,forms:[],worlds:[],achievements:[],history:[],memories:[],current:null};
+  return {version:SAVE_VERSION,total:0,forms:[],worlds:[],endings:[],achievements:[],history:[],memories:[],current:null};
 }
 export function draft(seed) {
   const state = {rng:hash(seed)};
@@ -251,6 +251,7 @@ export function finish(campaign, voluntary=false) {
   const memory={form:currentForm(life).name,artifact,ending:title};
   life.ending={key,title,text,artifact,voluntary};life.phase='ended';
   campaign.total++;
+  remember(campaign.endings,key);
   campaign.memories=[...campaign.memories,memory].slice(-6);
   campaign.history=[{number:life.number,form:currentForm(life).name,group:currentForm(life).group,origin:FORMS.find(f=>f.id===life.originFormId).name,seed:life.seed,world:WORLDS.find(w=>w.id===life.worldId).name,ending:title,turns:life.turn,artifact,stats:{...life.stats},logs:structuredClone(life.logs)},...campaign.history].slice(0,120);
   checkAchievements(campaign);
@@ -290,5 +291,10 @@ export function parseSave(text) {
     if(life.phase==='ended'?life.number!==output.total:life.number!==output.total+1)fail();
     output.current=life;
   }
+  output.endings=[...new Set([
+    ...arr(source.endings??[],Object.keys(ENDINGS).length).map(key=>Object.hasOwn(ENDINGS,key)?key:fail()),
+    ...output.history.map(h=>Object.keys(ENDINGS).find(key=>ENDINGS[key][0]===h.ending)).filter(Boolean),
+    ...(output.current?.ending?[output.current.ending.key]:[]),
+  ])];
   return output;
 }
